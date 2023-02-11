@@ -1,22 +1,17 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"github.com/PullRequestInc/go-gpt3"
-	"github.com/spf13/cobra"
 	"github.com/zhangyiming748/log"
-	"os"
 	"strings"
 	"time"
 )
 
-const Key = ""
-
 var answer = ""
 
-func GetResponse(client gpt3.Client, ctx context.Context, quesiton string) {
+func GetResponse(client gpt3.Client, ctx context.Context, quesiton string, out chan string) {
 	stop := make(chan bool)
 	go Wait(stop)
 	err := client.CompletionStreamWithEngine(ctx, gpt3.TextDavinci003Engine, gpt3.CompletionRequest{
@@ -32,46 +27,30 @@ func GetResponse(client gpt3.Client, ctx context.Context, quesiton string) {
 	if err != nil {
 		log.Warn.Panicf("%v\n", err)
 	}
-
-	fmt.Printf("%v\n", answer)
+	log.Debug.Printf("%v\n", answer)
+	answer = <-out
+	log.Debug.Printf("%v\n", answer)
 }
 
 type NullWriter int
 
 func (NullWriter) Write([]byte) (int, error) { return 0, nil }
 
-func main() {
+func ChatGPT(key string, in chan string, out chan string) {
 	//log.SetOutput(new(NullWriter))
 	ctx := context.Background()
-	client := gpt3.NewClient(Key)
-	rootCmd := &cobra.Command{
-		Use:   "chatgpt",
-		Short: "Chat with ChatGPT in console.",
-		Run: func(cmd *cobra.Command, args []string) {
-			scanner := bufio.NewScanner(os.Stdin)
-			quit := false
+	client := gpt3.NewClient(key)
 
-			for !quit {
-				fmt.Print("輸入你的問題(quit 離開): ")
-
-				if !scanner.Scan() {
-					break
-				}
-
-				question := scanner.Text()
-				questionParam := validateQuestion(question)
-				switch questionParam {
-				case "quit":
-					quit = true
-				case "":
-					continue
-				default:
-					GetResponse(client, ctx, questionParam)
-				}
-			}
-		},
+	for {
+		fmt.Print("still alive")
+		question := <-in
+		log.Debug.Printf("接收到了问题%v\n", question)
+		questionParam := validateQuestion(question)
+		GetResponse(client, ctx, questionParam, out)
+		if _, ok := <-in; !ok {
+			log.Warn.Println("程序退出")
+		}
 	}
-	log.Warn.Fatal(rootCmd.Execute())
 }
 
 // 这里判断问题内容是否有空格 如果有就截断 如果是关键词就返回空 这是什么用意
@@ -95,4 +74,9 @@ func Wait(ch chan bool) {
 			break
 		}
 	}
+}
+
+// 如果收到退出信号 退出chatgpt程序
+func Exit(ch chan bool) {
+
 }
