@@ -17,3 +17,4 @@ vendor
 .DS_store
 .DS*
 *.log
+unit_test.go
